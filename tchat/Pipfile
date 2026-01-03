@@ -4,8 +4,10 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-langchain = "==0.0.352"
+langchain = "*"
+langchain-community = "*"
 langchain-openai = "==0.0.5"
+tavily-python = "*"
 python-dotenv = "==1.0.0"
 
 [dev-packages]
