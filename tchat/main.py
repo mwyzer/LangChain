@@ -1,51 +1,56 @@
+# main.py
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_community.chat_message_histories import FileChatMessageHistory
 
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.runnables.history import RunnableWithMessageHistory
+def main():
+    # Load environment variables (OPENAI_API_KEY, etc.)
+    load_dotenv()
 
-load_dotenv()
+    # LLM
+    llm = ChatOpenAI(model="gpt-5.2", verbose=True)
 
-llm = ChatOpenAI(model="gpt-4o-mini")
+    # Persistent chat history (saved to disk)
+    history = FileChatMessageHistory(file_path="chat_history.json")
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "Kamu adalah asisten yang membantu."),
-    MessagesPlaceholder(variable_name="history"),
-    ("human", "{content}")
-])
+    # Prompt template includes:
+    # - system instruction
+    # - conversation history
+    # - latest user message
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Kamu adalah asisten yang membantu."),
+        MessagesPlaceholder(variable_name="history"),
+        ("human", "{content}")
+    ])
 
-chain = prompt | llm
+    # Chain: prompt -> llm
+    chain = prompt | llm
 
-# --- Memory Setup ---
-store = {}
+    print("Chat started. Type 'exit' or 'quit' to stop.")
+    while True:
+        content = input(">> ").strip()
+        if not content:
+            continue
+        if content.lower() in {"exit", "quit"}:
+            break
 
-def get_session_history(session_id: str):
-    if session_id not in store:
-        store[session_id] = ChatMessageHistory()
-    return store[session_id]
+        # 1) Save user message to persistent history
+        history.add_user_message(content)
 
-# Wrap the chain with message history
-chain_with_history = RunnableWithMessageHistory(
-    chain,
-    get_session_history,
-    input_messages_key="content",
-    history_messages_key="history",
-)
+        # 2) Invoke model with full history
+        response = chain.invoke({
+            "content": content,
+            "history": history.messages
+        })
 
-# --- Chat Loop ---
-session_id = "user_session_1"  # Static session ID for this script
+        # 3) Print assistant response
+        print(response.content)
 
-while True:
-    content = input(">> ")
-    if content.lower() in {"exit", "quit"}:
-        break
+        # 4) Save assistant response to persistent history
+        history.add_ai_message(response.content)
 
-    # history is now managed automatically by the wrapper
-    response = chain_with_history.invoke(
-        {"content": content},
-        config={"configurable": {"session_id": session_id}}
-    )
+    print("Bye!")
 
-    print(response.content)
+if __name__ == "__main__":
+    main()
